@@ -1,0 +1,59 @@
+# Clip Show: the web app plus one indexing worker, on one machine.
+# Copy .env.example to .env, fill it in, then: docker compose up -d
+# Open http://<this machine>:8000, sign in with a Jellyfin admin account, and choose Manage.
+#
+# To index on a different machine (say, one with a better graphics card), run compose.worker.yaml there
+# instead of the worker below; it talks to this web app over the network.
+
+services:
+  web:
+    image: ghcr.io/ryanhecht/clipshow:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+      - "${SHARE_PORT:-8001}:8001"                                  # share links only; the one port to publish
+    environment:
+      JELLYFIN_URL: ${JELLYFIN_URL:?set JELLYFIN_URL}               # how Clip Show reaches Jellyfin
+      JELLYFIN_PUBLIC_URL: ${JELLYFIN_PUBLIC_URL:-}                 # how browsers reach it, if different
+      CLIPSHOW_SIGNIN: ${CLIPSHOW_SIGNIN:-optional}                 # or: required
+      CLIPSHOW_WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN}      # workers must present this
+      CLIPSHOW_SHARE_PORT: 8001
+      CLIPSHOW_SHARE_URL: ${SHARE_URL:-}                            # public address of the share port, if any
+    volumes:
+      - ${DATA_DIR:-./data}:/data                 # indexes, thumbnails, rendered clips, settings
+      - ${MEDIA_DIR:?set MEDIA_DIR}:/media:ro      # your media; in Manage → Folders, map Jellyfin's folders to /media/...
+
+  worker:
+    # cpu works anywhere; use cuda for NVIDIA or rocm for AMD (see the GPU notes below).
+    image: ghcr.io/ryanhecht/clipshow-worker:${WORKER_FLAVOR:-cpu}
+    restart: unless-stopped
+    environment:
+      CLIPSHOW_SERVER: http://web:8000
+      CLIPSHOW_WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN}
+      CLIPSHOW_WORKERS: ${CLIPSHOW_WORKERS:-4}                      # episodes prepared in parallel
+    volumes:
+      - ${MEDIA_DIR:?set MEDIA_DIR}:/media:ro      # the same media, at the same path as the web app
+      - worker-cache:/data                         # downloaded models and scratch space
+
+    # --- GPU notes -------------------------------------------------------------------------------
+    # AMD/Intel video decoding (faster indexing on any flavor): pass the GPU's render node.
+    # devices:
+    #   - /dev/dri:/dev/dri
+    #
+    # AMD (WORKER_FLAVOR=rocm): also /dev/kfd, and the video/render groups.
+    # devices:
+    #   - /dev/dri:/dev/dri
+    #   - /dev/kfd:/dev/kfd
+    # group_add: [video, render]
+    #
+    # NVIDIA (WORKER_FLAVOR=cuda): needs the NVIDIA Container Toolkit on the host.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  worker-cache:

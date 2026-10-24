@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fredoka:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --sky: #e9eff4; --paper: #ffffff; --ink: #1e2833; --muted: #5c6b78; --line: #d3dde6; --accent: #f2b632; --accent-ink: #3a2a00; --danger: #b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --sky: #141b22; --paper: #1c252e; --ink: #e8eef3; --muted: #9aa8b4; --line: #2c3843; --danger: #f2b8b5; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--sky); color: var(--ink); font: 16px/1.45 "Atkinson Hyperlegible", system-ui, sans-serif; padding: 16px; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .card { width: min(100%, 420px); background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
+  h1 { font: 600 26px/1.15 Fredoka, system-ui, sans-serif; margin: 0 0 6px; }
+  p.lead { margin: 0 0 18px; color: var(--muted); }
+  label { display: block; font-weight: 700; font-size: 14px; margin: 12px 0 4px; }
+  input { width: 100%; padding: 10px 12px; font: inherit; color: inherit; background: var(--sky); border: 1px solid var(--line); border-radius: 8px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; padding: 10px 14px; font-weight: 700; }
+  .primary { width: 100%; margin-top: 16px; border: 0; background: var(--accent); color: var(--accent-ink); }
+  .secondary { width: 100%; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+  .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; margin: 18px 0; }
+  .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  .code { font: 600 40px/1 Fredoka, monospace; letter-spacing: .15em; text-align: center; margin: 12px 0 6px; }
+  .hint { color: var(--muted); font-size: 14px; text-align: center; margin: 0; }
+  .err { color: var(--danger); font-weight: 700; min-height: 1.4em; margin: 12px 0 0; }
+  [hidden] { display: none !important; }
+  .skip { display: block; text-align: center; margin-top: 16px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main class="card">
+  <img src="/static/jellyfin.svg" alt="Jellyfin" style="display:block;width:48px;height:48px;margin-bottom:10px">
+  <h1>Sign in with Jellyfin</h1>
+  <p class="lead" id="lead">Use the Jellyfin account you watch with.</p>
+  <form id="pw">
+    <label for="user">Jellyfin username</label>
+    <input id="user" autocomplete="username" required>
+    <label for="pass">Jellyfin password</label>
+    <input id="pass" type="password" autocomplete="current-password">
+    <button class="primary">Sign in with Jellyfin</button>
+  </form>
+  <div id="qc-block" hidden>
+    <div class="or">or</div>
+    <button class="secondary" id="qc">Use Quick Connect</button>
+    <div id="qc-code" hidden>
+      <div class="code" id="code" aria-live="polite"></div>
+      <p class="hint">In a Jellyfin app you're signed in to, open Quick Connect and enter this code.</p>
+    </div>
+  </div>
+  <p class="err" id="err" role="alert"></p>
+  <p class="hint" style="margin-top:14px">Clip Show checks your password with your Jellyfin server and doesn't keep it.</p>
+  <a class="skip" id="skip" href="/" hidden>Continue without signing in</a>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const next = new URLSearchParams(location.search).get("next") || "/";
+const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || `Sign-in failed (HTTP ${r.status}).`);
+  return data;
+}
+
+fetch("/api/auth/state").then(r => r.json()).then(s => {
+  if (s.user) { location.replace(safeNext); return; }
+  $("qc-block").hidden = !s.quick_connect;
+  $("skip").hidden = s.signin !== "optional";
+});
+
+$("pw").addEventListener("submit", async e => {
+  e.preventDefault(); $("err").textContent = "";
+  try { await post("/api/auth/login", { username: $("user").value, password: $("pass").value }); location.replace(safeNext); }
+  catch (err) { $("err").textContent = err.message; }
+});
+
+$("qc").addEventListener("click", async () => {
+  $("err").textContent = "";
+  try {
+    const { code, secret } = await post("/api/auth/quickconnect");
+    $("code").textContent = code; $("qc-code").hidden = false; $("qc").hidden = true;
+    const poll = async () => {
+      try {
+        const r = await post("/api/auth/quickconnect/check", { secret });
+        if (r.pending) return setTimeout(poll, 2000);
+        location.replace(safeNext);
+      } catch (err) { $("err").textContent = err.message; $("qc").hidden = false; $("qc-code").hidden = true; }
+    };
+    setTimeout(poll, 2000);
+  } catch (err) { $("err").textContent = err.message; }
+});
+</script>
+</body>
+</html>

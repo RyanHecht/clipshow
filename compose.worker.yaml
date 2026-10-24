@@ -1,0 +1,28 @@
+# A Clip Show worker on its own machine, indexing for a web app running elsewhere.
+# This machine needs the same media (mounted at /media, like on the web app's machine) and network
+# access to the web app; it shares nothing else. Set these in .env, then: docker compose -f compose.worker.yaml up -d
+#
+#   CLIPSHOW_SERVER   the web app, e.g. http://nas.local:8000
+#   WORKER_TOKEN      the same token the web app was started with
+#   MEDIA_DIR         this machine's path to the media
+#   WORKER_FLAVOR     cpu, cuda (NVIDIA) or rocm (AMD)
+
+services:
+  worker:
+    image: ghcr.io/ryanhecht/clipshow-worker:${WORKER_FLAVOR:-cpu}
+    restart: unless-stopped
+    environment:
+      CLIPSHOW_SERVER: ${CLIPSHOW_SERVER:?set CLIPSHOW_SERVER}
+      CLIPSHOW_WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN}
+      CLIPSHOW_WORKERS: ${CLIPSHOW_WORKERS:-4}
+    volumes:
+      - ${MEDIA_DIR:?set MEDIA_DIR}:/media:ro
+      - worker-cache:/data
+    # GPU access: see the notes in compose.yaml. For example, AMD:
+    # devices:
+    #   - /dev/dri:/dev/dri
+    #   - /dev/kfd:/dev/kfd
+    # group_add: [video, render]
+
+volumes:
+  worker-cache:

@@ -1,0 +1,10 @@
+.git
+.venv
+data
+data-*
+**/__pycache__
+*.pyc
+docs
+.github
+compose.yaml
+.env

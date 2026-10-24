@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clip Show</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fredoka:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky: #e9eff4; --paper: #ffffff; --ink: #1e2833; --muted: #5c6b78; --line: #d3dde6;
+    --sweater: #f2b632; --sweater-ink: #3a2a00; --brown: #7b4f2c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --sky: #141b22; --paper: #1c252e; --ink: #e8eef3; --muted: #9aa8b4; --line: #2c3843; --brown: #d9a877; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--sky); color: var(--ink); font: 16px/1.45 "Atkinson Hyperlegible", system-ui, sans-serif; }
+  :focus-visible { outline: 3px solid var(--sweater); outline-offset: 2px; }
+  header, main { max-width: 1240px; margin: 0 auto; padding: 0 16px; }
+  header { padding-top: 24px; padding-bottom: 8px; }
+  h1 { font: 600 34px/1 Fredoka, system-ui, sans-serif; margin: 0 0 6px; }
+  h1 a { color: inherit; text-decoration: none; }
+  h1 span { display: inline-block; background: var(--sweater); color: var(--sweater-ink); padding: 4px 12px 7px; border-radius: 10px; transform: rotate(-2deg); }
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 18px; padding-top: 18px; padding-bottom: 48px; }
+  .show { display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; color: inherit; text-decoration: none; }
+  .show:hover { border-color: var(--sweater); }
+  .show .pic { aspect-ratio: 16 / 9; background: #000 center / cover no-repeat; }
+  .show .txt { padding: 12px 14px 14px; }
+  .show h2 { margin: 0; font: 600 21px/1.2 Fredoka, system-ui, sans-serif; }
+  .show p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .empty { grid-column: 1 / -1; color: var(--muted); padding: 40px 0; }
+  .top { display: flex; align-items: flex-start; gap: 16px; }
+  .top > div:first-child { flex: 1; }
+  .account { padding-top: 8px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1><a href="/" title="All shows"><span>Clip Show</span></a></h1>
+  </div>
+  <div class="account" id="account"></div>
+</header>
+<main id="shows" aria-live="polite"></main>
+<script src="/static/signin.js"></script>
+<script>
+const fmt = n => n.toLocaleString();
+fetch("/api/auth/state").then(r => r.json()).then(s => Signin.account(document.getElementById("account"), s));
+fetch("/api/titles").then(r => r.json()).then(({ titles }) => {
+  const main = document.getElementById("shows");
+  if (!titles.length) { main.innerHTML = '<p class="empty">No shows yet.</p>'; return; }
+  for (const s of titles) {
+    const a = document.createElement("a");
+    a.className = "show"; a.href = `/t/${s.slug}/`;
+    a.innerHTML = `<div class="pic"></div><div class="txt"><h2></h2><p></p></div>`;
+    if (s.thumb) a.querySelector(".pic").style.backgroundImage = `url("${s.thumb}")`;
+    a.querySelector("h2").textContent = s.name;
+    a.querySelector("p").textContent = s.episodes
+      ? `${fmt(s.episodes)} episodes · ${fmt(s.moments)} moments`
+      : "Not indexed yet";
+    main.append(a);
+  }
+}).catch(() => { document.getElementById("shows").innerHTML = '<p class="empty">Couldn’t load the list of shows. Check that the server is running.</p>'; });
+</script>
+</body>
+</html>

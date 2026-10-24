@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manage titles · Clip Show</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fredoka:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --sky: #e9eff4; --paper: #ffffff; --ink: #1e2833; --muted: #5c6b78; --line: #d3dde6; --well: #f1f4f7;
+          --accent: #f2b632; --accent-ink: #3a2a00; --danger: #b3261e; --ok: #1f7a3a; }
+  @media (prefers-color-scheme: dark) { :root { --sky: #141b22; --paper: #1c252e; --ink: #e8eef3; --muted: #9aa8b4; --line: #2c3843; --well: #151d24; --danger: #f2b8b5; --ok: #8fd6a2; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--sky); color: var(--ink); font: 16px/1.45 "Atkinson Hyperlegible", system-ui, sans-serif; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  header, main { max-width: 1000px; margin: 0 auto; padding: 0 16px; }
+  header { display: flex; align-items: center; gap: 16px; padding-top: 22px; padding-bottom: 8px; flex-wrap: wrap; }
+  header h1 { font: 600 28px/1 Fredoka, system-ui, sans-serif; margin: 0; flex: 1; }
+  header a { color: var(--muted); }
+  section { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin: 16px 0; }
+  h2 { font: 600 20px/1.2 Fredoka, system-ui, sans-serif; margin: 0 0 4px; }
+  .help { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  label.f { display: block; font-weight: 700; font-size: 14px; margin: 12px 0 4px; }
+  input[type=text], input[type=url], input[type=search] { width: 100%; padding: 8px 10px; font: inherit; color: inherit; background: var(--well); border: 1px solid var(--line); border-radius: 8px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; padding: 7px 12px; font-weight: 700; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+  button.primary { border: 0; background: var(--accent); color: var(--accent-ink); }
+  button.danger { color: var(--danger); }
+  button.link { border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; font-weight: 400; color: var(--muted); }
+  button[disabled] { opacity: .6; cursor: progress; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .radio { display: grid; gap: 6px; margin-top: 4px; }
+  .radio label { display: flex; gap: 8px; align-items: baseline; }
+
+  .entry { display: grid; grid-template-columns: 96px 1fr; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .entry:first-child { border-top: 0; }
+  .entry .pic { width: 96px; aspect-ratio: 16/9; border-radius: 8px; background: #000 center / cover no-repeat; }
+  .entry h3 { margin: 0; font-size: 17px; }
+  .entry h3 a { color: inherit; }
+  .meta { color: var(--muted); font-size: 14px; margin: 2px 0 6px; }
+  .status { font-size: 14px; }
+  .status.failed { color: var(--danger); }
+  .status.done { color: var(--ok); }
+  .pick { margin-top: 10px; padding: 10px; background: var(--well); border-radius: 8px; }
+  .pick p { margin: 0 0 8px; font-size: 14px; }
+  .pick button { margin: 0 6px 6px 0; }
+
+  .crumbs { display: flex; gap: 6px; align-items: center; font-size: 15px; margin-bottom: 12px; }
+  .crumbs button { border: 0; padding: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; font-weight: 400; }
+  .libs { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .libs button { text-align: left; padding: 14px; background: var(--well); }
+  .libs button small { display: block; color: var(--muted); font-weight: 400; }
+  .item { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .item .meta { margin: 0; }
+  .warn { color: var(--danger); font-size: 13px; margin: 2px 0 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--muted); font-weight: 700; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  td.jf { word-break: break-all; }
+  td.st { width: 1.5em; font-weight: 700; }
+  td.st.ok { color: var(--ok); } td.st.no { color: var(--danger); }
+  td.said { max-width: 22em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) { th:nth-child(2), td.jf { display: none; } }
+
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 10px; font-weight: 700; opacity: 0; transition: opacity .15s; pointer-events: none; max-width: calc(100% - 32px); }
+  #toast.show { opacity: 1; }
+  #toast.err { background: var(--danger); color: #fff; }
+  .jf-logo { width: 1em; height: 1em; vertical-align: -0.12em; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Manage titles</h1>
+  <a href="/">All shows</a>
+  <button id="signout">Sign out</button>
+</header>
+<main>
+  <section>
+    <h2>Your titles</h2>
+    <div id="titles"><p class="help">Loading…</p></div>
+  </section>
+
+  <section>
+    <h2><img src="/static/jellyfin.svg" alt="" class="jf-logo"> Add from Jellyfin</h2>
+    <p class="help">Pick a library, then a show or movie to make it searchable.</p>
+    <nav class="crumbs" id="crumbs" aria-label="Library"></nav>
+    <div id="browser"><p class="help">Loading your libraries…</p></div>
+  </section>
+
+  <section>
+    <h2>Folders</h2>
+    <p class="help">Where this server finds each Jellyfin library. Fill in this server's path wherever it differs from Jellyfin's.</p>
+    <form id="folders">
+      <table>
+        <thead><tr><th>Library</th><th>Jellyfin folder</th><th>This server's folder</th><th><span class="sr" hidden>Found</span></th></tr></thead>
+        <tbody id="folder-rows"><tr><td colspan="4" class="help">Loading…</td></tr></tbody>
+      </table>
+      <div class="actions"><button class="primary">Save folders</button></div>
+    </form>
+  </section>
+
+  <section>
+    <h2>Settings</h2>
+    <form id="settings">
+      <label class="f" for="jf">Jellyfin address (from this server)</label>
+      <input type="url" id="jf" readonly>
+      <p class="help">Set with the JELLYFIN_URL setting when Clip Show starts; it can't be changed here.</p>
+      <label class="f" for="jfpub">Jellyfin address for browsers</label>
+      <input type="url" id="jfpub" placeholder="Same as above">
+      <p class="help">Where "Open in Jellyfin" sends people. Leave empty if it's the same address.</p>
+      <label class="f">Signing in</label>
+      <div class="radio">
+        <label><input type="radio" name="signin" value="optional"> Optional: anyone can search; signing in adds "Open in Jellyfin"</label>
+        <label><input type="radio" name="signin" value="required"> Required to use Clip Show</label>
+      </div>
+      <label class="f" for="cache">Space for rendered clips (MB)</label>
+      <input type="text" inputmode="decimal" id="cache">
+      <p class="help" id="cache-used">Clips, GIFs and frames are kept for reuse; when this fills up, the ones used longest ago are deleted.</p>
+      <label class="f" for="prefetch">Clips to prepare ahead for each search</label>
+      <input type="text" inputmode="numeric" id="prefetch">
+      <p class="help">The top results start rendering as soon as a search runs, so they play instantly. 0 turns this off.</p>
+      <label class="f" for="fav-user">Favorites per Jellyfin account</label>
+      <input type="text" inputmode="numeric" id="fav-user">
+      <label class="f" for="fav-browser">Favorites per signed-out browser</label>
+      <input type="text" inputmode="numeric" id="fav-browser">
+      <p class="help" id="fav-usage">Starred clips stay rendered and are never removed to make room, so these limits keep their space in check. 0 turns favorites off for that group; lowering a limit keeps existing favorites but stops new ones.</p>
+      <label class="f">Share links</label>
+      <div class="radio">
+        <label><input type="radio" name="share_links" value="everyone"> Anyone who can search can make them</label>
+        <label><input type="radio" name="share_links" value="signed_in"> Only people signed in with Jellyfin</label>
+        <label><input type="radio" name="share_links" value="off"> Off: links point at this server, for people who can reach it</label>
+      </div>
+      <label class="f" for="share-url">Public address for share links</label>
+      <input type="url" id="share-url" placeholder="e.g. https://media-box.your-tailnet.ts.net:8443">
+      <p class="help" id="share-help">Copy and the link button make links anyone can open, even while Clip Show itself stays private. Publish only the share port (CLIPSHOW_SHARE_PORT), which serves shared files and nothing else, and enter the address it's reachable at. Leave empty to make links with this server's own address.</p>
+      <div class="actions"><button class="primary">Save settings</button></div>
+    </form>
+  </section>
+
+  <section>
+    <h2>Shared links</h2>
+    <p class="help" id="shares-usage">Clips people have shared. Each stays rendered until you take its link down.</p>
+    <div id="shares"></div>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<template id="title-tpl">
+  <div class="entry">
+    <div class="pic"></div>
+    <div>
+      <h3><a></a></h3>
+      <p class="meta"></p>
+      <div class="status"></div>
+      <div class="actions">
+        <button data-act="index">Index new episodes</button>
+        <button data-act="link">Link to Jellyfin</button>
+        <button data-act="delete" class="danger">Delete</button>
+      </div>
+      <div class="pick" hidden></div>
+    </div>
+  </div>
+</template>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+const fmt = n => (n || 0).toLocaleString();
+let toastTimer;
+function toast(msg, err = false) {
+  const t = $("#toast"); t.textContent = msg; t.classList.toggle("err", err); t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), err ? 6000 : 2500);
+}
+async function api(method, url, body) {
+  const r = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) { location.href = "/login?next=/admin"; throw new Error("Signed out"); }
+  if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+  return data;
+}
+
+/* ---------- titles ---------- */
+function jobText(j) {
+  if (!j) return ["", ""];
+  if (j.status === "queued") return ["Waiting for a worker to start indexing.", "queued"];
+  if (j.status === "running") return [`Indexing: ${j.progress || "starting"}`, "running"];
+  if (j.status === "failed") return [`Indexing failed: ${j.error}`, "failed"];
+  if (j.status === "done") return [`Indexed ${j.updated_at.slice(0, 16)} UTC`, "done"];
+  return [j.status, ""];
+}
+
+let openPick = null;  // keep an open "which show?" picker across refreshes
+function renderTitles(list) {
+  const box = $("#titles");
+  if (!list.length) { box.replaceChildren(el("p", { className: "help", textContent: "No titles yet. Add one from Jellyfin below." })); return; }
+  box.replaceChildren(...list.map(s => {
+    const node = $("#title-tpl").content.firstElementChild.cloneNode(true);
+    node.dataset.slug = s.slug; node.dataset.name = s.name;
+    if (s.thumb) $(".pic", node).style.backgroundImage = `url("${s.thumb}")`;
+    const a = $("h3 a", node); a.textContent = s.name; a.href = `/t/${s.slug}/`;
+    $(".meta", node).textContent = `${fmt(s.episodes)} episodes · ${fmt(s.moments)} moments · ${s.jellyfin ? "linked to Jellyfin" : "not linked to Jellyfin"}`;
+    const [text, cls] = jobText(s.job);
+    const st = $(".status", node); st.textContent = text; st.className = `status ${cls}`;
+    $('[data-act="link"]', node).textContent = s.jellyfin ? "Refresh from Jellyfin" : "Link to Jellyfin";
+    if (openPick && openPick.slug === s.slug) showPick(node, openPick.items);
+    return node;
+  }));
+}
+
+function showPick(node, items) {
+  const box = $(".pick", node);
+  box.hidden = false;
+  box.replaceChildren(el("p", { textContent: items.length ? "Which Jellyfin title is this?" : "No Jellyfin title with that name." }));
+  for (const it of items) {
+    const b = el("button", { textContent: `${it.name}${it.year ? ` (${it.year})` : ""}` });
+    b.addEventListener("click", () => linkTo(node, it));
+    box.append(b);
+  }
+  const cancel = el("button", { className: "link", textContent: "Cancel" });
+  cancel.addEventListener("click", () => { openPick = null; box.hidden = true; });
+  box.append(cancel);
+}
+
+async function linkTo(node, item) {
+  openPick = null; $(".pick", node).hidden = true;
+  try {
+    toast("Linking…");
+    const r = await api("POST", `/api/admin/titles/${node.dataset.slug}/link`, { series_id: item.id });
+    toast(`Linked to ${item.name}: ${r.matched} of ${r.indexed} indexed episodes found in Jellyfin.`);
+    loadTitles();
+  } catch (e) { toast(e.message, true); }
+}
+
+$("#titles").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const node = b.closest(".entry"), slug = node.dataset.slug, name = node.dataset.name;
+  try {
+    if (b.dataset.act === "index") { await api("POST", `/api/admin/titles/${slug}/index`); toast("Indexing queued."); }
+    if (b.dataset.act === "delete") {
+      if (!confirm(`Remove ${name} from Clip Show and delete its index? Your videos aren't touched.`)) return;
+      await api("DELETE", `/api/admin/titles/${slug}`); toast(`Deleted ${name}.`);
+    }
+    if (b.dataset.act === "link") {
+      b.disabled = true;
+      const { items } = await api("GET", `/api/admin/titles/${slug}/matches`);
+      b.disabled = false;
+      const exact = items.filter(i => i.name.toLowerCase() === name.toLowerCase());
+      if (exact.length === 1) return linkTo(node, exact[0]);
+      openPick = { slug, items }; showPick(node, items);
+      return;
+    }
+    loadTitles();
+  } catch (err) { b.disabled = false; toast(err.message, true); }
+});
+
+async function loadTitles() { renderTitles((await api("GET", "/api/admin/state")).titles); }
+
+/* ---------- library browser ---------- */
+let libraries = [], current = null, items = [];
+const TYPE = { tvshows: "TV shows", movies: "Movies", mixed: "Mixed", homevideos: "Home videos", musicvideos: "Music videos" };
+
+function crumbs() {
+  const nav = $("#crumbs"); nav.replaceChildren();
+  const home = el("button", { textContent: "Libraries" });
+  home.addEventListener("click", showLibraries);
+  nav.append(current ? home : el("strong", { textContent: "Libraries" }));
+  if (current) nav.append(el("span", { textContent: "›" }), el("strong", { textContent: current.name }));
+}
+
+function showLibraries() {
+  current = null; crumbs();
+  const grid = el("div", { className: "libs" });
+  for (const lib of libraries) {
+    const b = el("button", {}, lib.name, el("small", { textContent: TYPE[lib.type] || lib.type || "" }));
+    b.addEventListener("click", () => openLibrary(lib));
+    grid.append(b);
+  }
+  $("#browser").replaceChildren(libraries.length ? grid : el("p", { className: "help", textContent: "No video libraries found in Jellyfin." }));
+}
+
+async function openLibrary(lib) {
+  current = lib; crumbs();
+  $("#browser").replaceChildren(el("p", { className: "help", textContent: "Loading…" }));
+  try {
+    items = (await api("GET", `/api/admin/libraries/${lib.id}/items`)).items;
+    const filter = el("input", { type: "search", placeholder: `Filter ${lib.name}`, ariaLabel: `Filter ${lib.name}` });
+    const list = el("div");
+    filter.addEventListener("input", () => renderItems(list, filter.value));
+    $("#browser").replaceChildren(filter, list);
+    renderItems(list, "");
+    filter.focus();
+  } catch (err) { $("#browser").replaceChildren(el("p", { className: "warn", textContent: `Couldn't load ${lib.name}: ${err.message}` })); }
+}
+
+function renderItems(list, q) {
+  q = q.trim().toLowerCase();
+  const shown = items.filter(i => !q || i.name.toLowerCase().includes(q));
+  if (!shown.length) { list.replaceChildren(el("p", { className: "help", textContent: "Nothing matches." })); return; }
+  list.replaceChildren(...shown.slice(0, 300).map(i => {
+    const left = el("div", {}, el("strong", { textContent: i.name + (i.year ? ` (${i.year})` : "") }));
+    if (i.type === "Series" && i.episodes) left.append(el("p", { className: "meta", textContent: `${i.episodes} items` }));
+    const right = el("div");
+    if (i.title) right.append(el("a", { href: `/t/${i.title}/`, textContent: "Added" }));
+    else {
+      const b = el("button", { className: "primary", textContent: "Add" });
+      b.addEventListener("click", () => commissionItem(i, b));
+      right.append(b);
+      if (!i.found) left.append(el("p", { className: "warn", textContent: `This server can't find ${i.local || i.path}. Check Folders below.` }));
+    }
+    return el("div", { className: "item" }, left, right);
+  }));
+}
+
+async function commissionItem(i, btn) {
+  btn.disabled = true; btn.textContent = "Setting up…";
+  try { const r = await api("POST", "/api/admin/titles", { series_id: i.id }); i.title = r.slug; toast(`Created ${i.name}; indexing is queued.`); btn.replaceWith(el("a", { href: `/t/${r.slug}/`, textContent: "Added" })); loadTitles(); }
+  catch (e) { toast(e.message, true); btn.disabled = false; btn.textContent = "Add"; }
+}
+
+async function loadLibraries() {
+  try { libraries = (await api("GET", "/api/admin/libraries")).libraries; showLibraries(); }
+  catch (err) { $("#browser").replaceChildren(el("p", { className: "warn", textContent: `Couldn't load your Jellyfin libraries: ${err.message}` })); }
+}
+
+/* ---------- folders ---------- */
+async function loadFolders() {
+  const tbody = $("#folder-rows");
+  try {
+    const { folders } = await api("GET", "/api/admin/folders");
+    if (!folders.length) { tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 4, className: "help", textContent: "Jellyfin has no library folders." }))); return; }
+    tbody.replaceChildren(...folders.map(f => {
+      const input = el("input", { type: "text", value: f.local, ariaLabel: `This server's folder for ${f.jellyfin}` });
+      input.dataset.jf = f.jellyfin;
+      const st = el("td", { className: `st ${f.found ? "ok" : "no"}`, textContent: f.found ? "✓" : "✗", title: f.found ? "Found on this server" : "Not found on this server" });
+      return el("tr", {}, el("td", { textContent: f.library }), el("td", { className: "jf", textContent: f.jellyfin }), el("td", {}, input), st);
+    }));
+  } catch (err) { tbody.replaceChildren(el("tr", {}, el("td", { colSpan: 4, className: "warn", textContent: `Couldn't load Jellyfin's folders: ${err.message}` }))); }
+}
+
+$("#folders").addEventListener("submit", async e => {
+  e.preventDefault();
+  const maps = [...document.querySelectorAll("#folder-rows input")]
+    .map(i => [i.dataset.jf, i.value.trim()]).filter(([jf, local]) => local && local !== jf);
+  try { await api("PUT", "/api/admin/settings", { path_maps: maps }); toast("Folders saved."); loadFolders(); if (current) openLibrary(current); }
+  catch (err) { toast(err.message, true); }
+});
+
+/* ---------- settings ---------- */
+$("#settings").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    await api("PUT", "/api/admin/settings", { jellyfin_public_url: $("#jfpub").value.trim(), render_cache_mb: $("#cache").value.trim(), prefetch: $("#prefetch").value.trim(),
+      favorites_user: $("#fav-user").value.trim(), favorites_browser: $("#fav-browser").value.trim(),
+      signin: document.querySelector('input[name="signin"]:checked').value,
+      share_links: document.querySelector('input[name="share_links"]:checked').value, share_url: $("#share-url").value.trim() });
+    toast("Settings saved.");
+  } catch (err) { toast(err.message, true); }
+});
+
+/* ---------- shared links ---------- */
+const FORMAT_NAMES = { gif: "GIF", clip: "Video", frame: "Frame" };
+async function loadShares() {
+  const { shares, base } = await api("GET", "/api/admin/shares");
+  const box = $("#shares");
+  if (!shares.length) { box.replaceChildren(el("p", { className: "help", textContent: "Nothing shared yet." })); return; }
+  const origin = base || location.origin;
+  const rows = shares.map(s => {
+    const link = el("a", { href: `${origin}/s/${s.token}.${s.ext}`, target: "_blank", rel: "noopener", textContent: FORMAT_NAMES[s.fmt] });
+    const revoke = el("button", { className: "danger", textContent: "Take down" });
+    revoke.addEventListener("click", async () => {
+      if (!confirm("Take this link down? Anyone who has it will get a \"not found\" page.")) return;
+      try { await api("DELETE", `/api/admin/shares/${s.token}`); toast("Link taken down."); loadShares(); }
+      catch (err) { toast(err.message, true); }
+    });
+    return el("tr", {},
+      el("td", { className: "said", title: s.text, textContent: s.text ? `\u201c${s.text}\u201d` : "(no line)" }),
+      el("td", { textContent: s.source }), el("td", {}, link, s.missing ? " (file missing)" : ""),
+      el("td", { textContent: s.owner_name || "" }), el("td", { textContent: s.created_at.slice(0, 10) }),
+      el("td", { className: "num", textContent: fmt(s.views) }), el("td", {}, revoke));
+  });
+  const head = el("tr", {}, ...["Line", "From", "Link", "Shared by", "On", "Views", ""].map(h => el("th", { textContent: h })));
+  box.replaceChildren(el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)));
+}
+
+$("#signout").addEventListener("click", async () => { await fetch("/api/auth/logout", { method: "POST" }); location.href = "/"; });
+
+(async () => {
+  const s = await api("GET", "/api/admin/state");
+  renderTitles(s.titles);
+  $("#jf").value = s.settings.jellyfin_url || ""; $("#jfpub").value = s.settings.jellyfin_public_url || "";
+  const radio = document.querySelector(`input[name="signin"][value="${s.settings.signin}"]`); if (radio) radio.checked = true;
+  $("#cache").value = s.settings.render_cache_mb; $("#prefetch").value = s.settings.prefetch;
+  $("#fav-user").value = s.settings.favorites_user; $("#fav-browser").value = s.settings.favorites_browser;
+  $("#fav-usage").textContent = `${fmt(s.favorites.count)} favorites from ${fmt(s.favorites.owners)} people, using ${fmt(s.favorites.mb)} MB. ` +
+    "Starred clips stay rendered and are never removed to make room, so these limits keep their space in check. 0 turns favorites off for that group; lowering a limit keeps existing favorites but stops new ones.";
+  const shareRadio = document.querySelector(`input[name="share_links"][value="${s.settings.share_links}"]`); if (shareRadio) shareRadio.checked = true;
+  $("#share-url").value = s.settings.share_url || "";
+  $("#shares-usage").textContent = `${fmt(s.shares.count)} shared, using ${fmt(s.shares.mb)} MB. Each stays rendered until you take its link down.`;
+  if (!s.share_listener) $("#share-help").textContent += " The share port isn't turned on: set CLIPSHOW_SHARE_PORT and restart to use a public address.";
+  loadShares();
+  $("#cache-used").textContent = `${fmt(s.render_cache.used_mb)} MB in use. Clips, GIFs and frames are kept for reuse; when this fills up, the ones used longest ago are deleted.`;
+  loadLibraries(); loadFolders();
+  setInterval(loadTitles, 5000);  // indexing progress
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clip Show</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fredoka:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky: #e9eff4; --paper: #ffffff; --ink: #1e2833; --muted: #5c6b78; --line: #d3dde6; --well: #f1f4f7;
+    --sweater: #f2b632; --sweater-ink: #3a2a00; --brown: #7b4f2c; --danger: #b3261e;
+    --chrome: #111820; --chrome-ink: #e8eef3; --chrome-muted: #93a3b1;
+    --radius-tile: 14px; --radius-ctl: 8px;
+    --bar: 44px; --trim: 34px;  /* player chrome under the picture */
+    --ar: 4 / 3;                /* set from the first thumbnail so every tile matches */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --sky: #141b22; --paper: #1c252e; --ink: #e8eef3; --muted: #9aa8b4; --line: #2c3843; --well: #151d24; --brown: #d9a877; --danger: #f2b8b5; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--sky); color: var(--ink); font: 16px/1.45 "Atkinson Hyperlegible", system-ui, sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--sweater); outline-offset: 2px; }
+
+  .banner { background: var(--sky) center 30% / cover no-repeat; }
+  .banner.art { background-image: linear-gradient(to bottom, color-mix(in srgb, var(--sky) 55%, transparent), var(--sky) 92%), var(--backdrop); }
+  header { padding: 20px 16px 14px; max-width: 1240px; margin: 0 auto; }
+  .banner.art header { padding-top: 16px; }
+  .banner.art .bar-top { padding-top: 28px; }
+  .topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+  /* The product mark: always there, always home, in the show's colours. */
+  .brand { display: inline-block; font: 600 17px/1 Fredoka, system-ui, sans-serif; text-decoration: none; background: var(--sweater); color: var(--sweater-ink);
+           padding: 5px 10px 6px; border-radius: 8px; transform: rotate(-2deg); box-shadow: 0 1px 0 rgba(0,0,0,.25); transition: transform .12s; }
+  .brand:hover { transform: rotate(-2deg) translateY(-1px); }
+  h1 img { display: block; max-height: 64px; max-width: min(320px, 60vw); object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,.35)); }
+  /* A white logo on a light page (e.g. Gilmore Girls) gets a dark halo so it stays readable. */
+  @media (prefers-color-scheme: light) { h1 img.pale { filter: drop-shadow(0 0 1px rgba(0,0,0,.9)) drop-shadow(0 1px 3px rgba(0,0,0,.7)) drop-shadow(0 2px 10px rgba(0,0,0,.45)); } }
+
+  .bar-top { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  h1 { font: 600 30px/1 Fredoka, system-ui, sans-serif; margin: 0; letter-spacing: -0.01em; }
+  h1 a { color: inherit; text-decoration: none; }
+  h1 span { display: inline-block; }
+  form { flex: 1 1 420px; display: flex; gap: 8px; }
+  #q { flex: 1; min-width: 0; padding: 12px 14px; font-size: 17px; border: 2px solid var(--line); border-radius: var(--radius-ctl); background: var(--paper); }
+  #q:focus { border-color: var(--sweater); outline: none; }
+  .go { padding: 0 18px; border: 0; border-radius: var(--radius-ctl); background: var(--sweater); color: var(--sweater-ink); font-weight: 700; cursor: pointer; }
+  #status { max-width: 1240px; margin: 0 auto; padding: 0 16px; color: var(--muted); font-size: 14px; min-height: 1.4em; }
+
+  main { max-width: 1240px; margin: 12px auto 48px; padding: 0 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 18px; }
+  .tile { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-tile); overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Player: picture, then a control bar and the trim row below it. The play button starts over the
+     picture and travels down into its slot in the bar. */
+  .player { position: relative; background: var(--chrome); color: var(--chrome-ink); }
+  .screen { position: relative; aspect-ratio: var(--ar); background: #000; cursor: pointer; }
+  .screen img, .screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+  .screen [hidden] { display: none !important; }
+  .controls { height: var(--bar); display: flex; align-items: center; gap: 12px; padding: 0 12px 0 10px; }
+  .track { position: relative; flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.22); cursor: pointer; touch-action: none; }
+  .track::before { content: ""; position: absolute; inset: -12px 0; }  /* bigger hit area */
+  .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 3px; background: var(--sweater); }
+  .knob { position: absolute; top: 50%; left: 0; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.5); opacity: 0; transition: opacity .15s; }
+  .tile.started .knob { opacity: 1; }
+  .tile:not(.started) .track { pointer-events: none; opacity: .5; }
+  .clock { font-size: 12px; color: var(--chrome-muted); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 6.5em; text-align: right; }
+  .trim { height: var(--trim); display: flex; align-items: center; gap: 16px; padding: 0 12px 6px; font-size: 13px; color: var(--chrome-muted); border-top: 1px solid rgba(255,255,255,.08); }
+  .trim .nudge { display: inline-flex; align-items: center; gap: 4px; }
+  .trim button { width: 24px; height: 22px; border: 1px solid rgba(255,255,255,.18); border-radius: 5px; background: transparent; color: var(--chrome-ink); cursor: pointer; line-height: 1; padding: 0; }
+  .trim button:hover { background: rgba(255,255,255,.1); }
+  .trim output { min-width: 3.2em; text-align: center; font-variant-numeric: tabular-nums; color: var(--chrome-ink); }
+
+  .pp { flex: none; position: relative; width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--sweater); color: var(--sweater-ink);
+        display: grid; place-items: center; cursor: pointer; transition: transform .12s; }
+  .pp:hover { transform: scale(1.08); }
+  .pp svg { width: 16px; height: 16px; display: none; }
+  .tile:not(.playing):not(.ended) .pp .i-play, .tile.playing .pp .i-pause, .tile.ended:not(.playing) .pp .i-replay { display: block; }
+
+  /* Rendering a clip takes a second or two: dim the picture with a spinner over it, ring the button,
+     and sweep the scrub bar, so it's clear something is on its way. */
+  .screen::after { content: ""; position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px;
+                   border-radius: 50%; border: 4px solid rgba(255,255,255,.25); border-top-color: var(--sweater);
+                   opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .screen img, .screen video { transition: filter .2s; }
+  .tile.loading .screen img, .tile.loading .screen video { filter: brightness(.55) saturate(.7); }
+  .tile.loading .screen::after { opacity: 1; animation: spin .8s linear infinite; }
+  .pp::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid transparent; pointer-events: none; }
+  .tile.loading .pp::after { border-top-color: var(--sweater); border-right-color: var(--sweater); animation: spin .8s linear infinite; }
+  .tile.loading .track { opacity: 1; background: linear-gradient(90deg, rgba(255,255,255,.12) 0%, rgba(242,182,50,.75) 50%, rgba(255,255,255,.12) 100%) 0 0 / 40% 100% no-repeat, rgba(255,255,255,.12);
+                         animation: sweep 1.1s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes sweep { from { background-position: -40% 0, 0 0; } to { background-position: 140% 0, 0 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .tile.loading .screen::after, .tile.loading .pp::after { animation: none; }
+    .tile.loading .track { animation: none; background: rgba(242,182,50,.35); }
+  }
+
+  /* Text: fixed slots, clamped, so every tile is the same height. Full text is in the tooltip. */
+  .body { padding: 10px 14px 0; display: grid; grid-template-rows: 18px calc(2 * 1.3em) 20px 18px; row-gap: 4px; font-size: 16px; }
+  .who { margin: 0; font-size: 13px; font-weight: 700; color: var(--brown); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .line { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .line q { quotes: "“" "”"; }
+  .line q::before, .line q::after { color: var(--brown); }
+  .line.silent { font-weight: 400; font-style: italic; color: var(--muted); }
+  .stage { margin: 0; font-size: 14px; font-style: italic; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .where { margin: 0; font-size: 13px; color: var(--brown); display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .where span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jf { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 13px; font-weight: 700; color: var(--brown);
+        background: none; border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; cursor: pointer; }
+  .jf:hover { border-color: var(--brown); }
+  .jf svg { width: 11px; height: 11px; }
+  .jf .jf-logo { width: 14px; height: 14px; }
+  .star { flex: none; width: 26px; height: 22px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: 6px;
+          background: none; color: var(--muted); cursor: pointer; padding: 0; }
+  .star:not([hidden]) + .jf { margin-left: 0; }
+  .where .star { margin-left: auto; }
+  .star svg { width: 15px; height: 15px; }
+  .star[aria-pressed="true"] { color: var(--sweater); border-color: var(--sweater); }
+  .star[aria-pressed="true"] svg path { fill: currentColor; }
+  .star:hover { border-color: var(--sweater); }
+  .where { position: relative; }
+  .unfav { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; align-items: center; gap: 8px;
+           background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+           box-shadow: 0 4px 14px rgba(0,0,0,.18); font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .unfav button { font: inherit; font-size: 13px; padding: 3px 9px; border-radius: 6px; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+  .unfav .yes { border: 0; background: var(--sweater); color: var(--sweater-ink); }
+  .section-head { max-width: 1240px; margin: 4px auto 0; padding: 0 16px; font: 600 20px/1.2 Fredoka, system-ui, sans-serif; }
+  .jf:hover { border-color: #00A4DC; }
+
+  /* Pick what, then copy or download it. */
+  .take { display: flex; gap: 8px; align-items: center; padding: 12px 14px 14px; margin-top: auto; }
+  .seg { display: inline-flex; background: var(--well); border: 1px solid var(--line); border-radius: var(--radius-ctl); padding: 2px; }
+  .seg label { position: relative; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg span { display: block; padding: 4px 10px; border-radius: 6px; font-size: 14px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .seg input:checked + span { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  .seg input:focus-visible + span { outline: 3px solid var(--sweater); }
+  .capt { position: relative; }
+  .capt input { position: absolute; opacity: 0; pointer-events: none; }
+  .capt span { display: block; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; text-decoration: line-through; }
+  .capt input:checked + span { color: var(--ink); border-color: var(--brown); text-decoration: none; }
+  .capt input:focus-visible + span { outline: 3px solid var(--sweater); }
+  .act { display: inline-flex; gap: 6px; margin-left: auto; }
+  .act button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius-ctl); cursor: pointer; font-weight: 700; font-size: 14px; }
+  .act .copy { border: 0; background: var(--sweater); color: var(--sweater-ink); min-width: 76px; justify-content: center; }
+  .act .dl, .act .link { border: 1px solid var(--line); background: transparent; padding: 6px 9px; color: inherit; }
+  .act button[hidden] { display: none; }
+  .act button[disabled] { opacity: .65; cursor: progress; }
+  .act svg { width: 16px; height: 16px; }
+
+  /* Page-wide spinner while a search runs. */
+  #busy { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: color-mix(in srgb, var(--sky) 65%, transparent);
+          opacity: 0; pointer-events: none; transition: opacity .15s; }
+  #busy::after { content: ""; width: 56px; height: 56px; border-radius: 50%; border: 6px solid var(--line); border-top-color: var(--sweater); animation: spin .8s linear infinite; }
+  body.searching #busy { opacity: 1; pointer-events: auto; }
+  @media (prefers-reduced-motion: reduce) { #busy::after { animation: none; border-color: var(--sweater); } }
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--danger); color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity .15s; max-width: calc(100% - 32px); }
+  #toast.show { opacity: 1; }
+  .empty { grid-column: 1 / -1; color: var(--muted); text-align: center; padding: 48px 0; }
+  @media (prefers-reduced-motion: reduce) { *, *::before { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="banner"><header>
+  <div class="topline">
+    <a class="brand" href="/" title="All shows">Clip Show</a>
+    <div class="account" id="account"></div>
+  </div>
+  <div class="bar-top">
+    <h1><a href="./" title="Start a new search"><span></span></a></h1>
+    <form id="f" role="search">
+      <input id="q" type="search" aria-label="Describe the moment you want" placeholder="Describe a moment, or quote a line" autocomplete="off" autofocus>
+      <button class="go">Search</button>
+    </form>
+  </div>
+</header></div>
+<div id="status" aria-live="polite"></div>
+<h2 class="section-head" id="favs-head" hidden>Favorites</h2>
+<main id="results"></main>
+<div id="busy" aria-hidden="true"></div>
+<div id="toast" role="alert"></div>
+
+<template id="tile">
+  <article class="tile">
+    <div class="player">
+      <div class="screen" tabindex="0" aria-label="Clip. Space plays or pauses; arrow keys step one frame.">
+        <img alt="">
+        <video playsinline preload="none" hidden></video>
+      </div>
+      <div class="controls">
+        <button class="pp" aria-label="Play">
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+          <svg class="i-replay" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>
+        </button>
+        <div class="track" role="slider" aria-label="Position in clip" tabindex="-1"><div class="fill"></div><div class="knob"></div></div>
+        <span class="clock"></span>
+      </div>
+      <div class="trim" aria-label="Adjust clip length">
+        <span class="nudge">Start <button data-trim="ds" data-step="-0.5" aria-label="Start earlier">−</button><output data-val="ds">0.0s</output><button data-trim="ds" data-step="0.5" aria-label="Start later">+</button></span>
+        <span class="nudge">End <button data-trim="de" data-step="-0.5" aria-label="End earlier">−</button><output data-val="de">0.0s</output><button data-trim="de" data-step="0.5" aria-label="End later">+</button></span>
+      </div>
+    </div>
+    <div class="body">
+      <p class="who"></p>
+      <p class="line"></p>
+      <p class="stage"></p>
+      <p class="where"><span></span><button class="star" aria-pressed="false" title="Add to favorites">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button><button class="jf" hidden title="Open this episode in Jellyfin at this moment (new tab)"><img src="/static/jellyfin.svg" alt="" class="jf-logo">Jellyfin
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 3h7v7h-2V6.4l-9.3 9.3-1.4-1.4L17.6 5H14zM5 5h6v2H5v12h12v-6h2v8H3V5z"/></svg></button></p>
+    </div>
+    <div class="take">
+      <div class="seg" role="radiogroup" aria-label="What to take">
+        <label><input type="radio" value="gif" checked><span>GIF</span></label>
+        <label><input type="radio" value="clip"><span>Video</span></label>
+        <label title="The frame the clip is paused on (the middle frame if it hasn't played)"><input type="radio" value="frame"><span>Frame</span></label>
+      </div>
+      <label class="capt" title="Caption the frame with the line being said" hidden><input type="checkbox" checked><span>CC</span></label>
+      <div class="act">
+        <button class="copy">Copy</button>
+        <button class="link" aria-label="Copy link" title="Copy a link to it"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></button>
+        <button class="dl" aria-label="Download" title="Download"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 4h2v9.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6zM5 18h14v2H5z"/></svg></button>
+      </div>
+    </div>
+  </article>
+</template>
+
+<script src="/static/signin.js"></script>
+<script>
+const FPS = 24;
+const $ = (sel, el = document) => el.querySelector(sel);
+const results = $("#results"), status = $("#status");
+
+const fmtT = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+const signed = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1) + "s";
+
+let toastTimer;
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 5000);
+}
+
+async function search(q) {
+  history.replaceState(null, "", "?q=" + encodeURIComponent(q));
+  $("#favs-head").hidden = true;
+  status.textContent = "Searching…";
+  document.body.classList.add("searching");
+  results.setAttribute("aria-busy", "true");
+  let list;
+  try {
+    const r = await fetch("api/search?" + new URLSearchParams({ q, k: 36 }));
+    if (!r.ok) { status.textContent = `Search failed (HTTP ${r.status}). Check the server log.`; return; }
+    ({ results: list } = await r.json());
+  } catch {
+    status.textContent = "Search failed: the server didn't respond. Check that it's running.";
+    return;
+  } finally {
+    document.body.classList.remove("searching");
+    results.removeAttribute("aria-busy");
+  }
+  results.replaceChildren(...list.map(tile));
+  status.textContent = list.length ? `${list.length} moments` : "";
+  if (!list.length) results.innerHTML = `<p class="empty">No moments match “${q.replace(/</g, "&lt;")}”. Try describing the reaction instead of quoting it, or the other way round.</p>`;
+}
+
+// Every tile uses the show's frame shape (from the first thumbnail), so tiles line up.
+let arSet = false;
+function setAspect(img) {
+  if (arSet || !img.naturalWidth) return;
+  document.documentElement.style.setProperty("--ar", `${img.naturalWidth} / ${img.naturalHeight}`);
+  arSet = true;
+}
+
+function fill(el, sel, text, title = text) {
+  const node = $(sel, el);
+  node.textContent = text || "";
+  if (title) node.title = title;
+  return node;
+}
+
+let uid = 0;
+function tile(m) {
+  const el = buildTile(m);
+  markStar(el);
+  return el;
+}
+
+function buildTile(m) {
+  const el = $("#tile").content.firstElementChild.cloneNode(true);
+  el.moment = m; el.trim = { ds: m.ds || 0, de: m.de || 0 };  // search may suggest pulling in a quoted neighbouring line
+  for (const k of ["ds", "de"]) $(`[data-val=${k}]`, el).textContent = signed(el.trim[k]);
+  const img = $("img", el);
+  img.src = `thumbs/${m.thumb}`;
+  img.alt = m.text ? `Frame: ${m.text}` : "Frame from a moment without dialogue";
+  img.onload = () => setAspect(img);
+  const said = (m.speaker ? m.text.replace(/^[A-Z][A-Z .'&-]+:\s*/, "") : m.text)  // the name is shown above instead
+    .replace(/([(\[])\s+/g, "$1").replace(/\s+([)\]])/g, "$1");  // "( sighs )" -> "(sighs)"
+  fill(el, ".who", m.speaker);
+  const line = $(".line", el);
+  if (said) { line.innerHTML = "<q></q>"; $("q", line).textContent = said; line.title = said; }
+  else { line.textContent = "No dialogue"; line.classList.add("silent"); }
+  fill(el, ".stage", m.notes || m.description);
+  fill(el, ".where span", `${m.episode} at ${fmtT(m.start)}`);
+  $(".jf", el).hidden = !m.jellyfin;
+  $(".clock", el).textContent = `0.0 / ${clipLength(el).toFixed(1)}s`;
+  if (!canCopy) $(".copy", el).remove();
+  if (canShare) Object.assign($(".dl", el), { innerHTML: SHARE_ICON, title: "Share", ariaLabel: "Share" });
+  const name = `take${uid++}`;
+  el.querySelectorAll(".seg input").forEach(r => (r.name = name));
+  syncTake(el);
+  wireVideo(el);
+  return el;
+}
+
+const trimQuery = el => `ds=${el.trim.ds}&de=${el.trim.de}`;
+const clipLength = el => el.moment.end - el.moment.start + el.trim.de - el.trim.ds;
+
+/* ---------- playback ---------- */
+function setButton(el, state) {  // "play" | "pause" | "replay"
+  el.classList.toggle("playing", state === "pause");
+  el.classList.toggle("ended", state === "replay");
+  $(".pp", el).setAttribute("aria-label", { play: "Play", pause: "Pause", replay: "Replay" }[state]);
+}
+
+function wireVideo(el) {
+  const video = $("video", el), fillBar = $(".fill", el), knob = $(".knob", el), clock = $(".clock", el), track = $(".track", el);
+  const draw = () => {
+    const d = video.duration || clipLength(el), p = d ? Math.min(video.currentTime / d, 1) : 0;
+    fillBar.style.width = knob.style.left = `${p * 100}%`;
+    clock.textContent = `${video.currentTime.toFixed(1)} / ${d.toFixed(1)}s`;
+  };
+  const tick = () => { draw(); if (!video.paused) requestAnimationFrame(tick); };
+  video.addEventListener("timeupdate", draw);
+  video.addEventListener("seeked", () => { draw(); if (video.paused && !video.ended) setButton(el, "play"); });
+  video.addEventListener("play", () => { setButton(el, "pause"); tick(); });
+  video.addEventListener("pause", () => { if (!video.ended) setButton(el, "play"); draw(); });
+  video.addEventListener("ended", () => { setButton(el, "replay"); draw(); });
+
+  const seekTo = e => {
+    const r = track.getBoundingClientRect();
+    video.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (video.duration || 0);
+  };
+  track.addEventListener("pointerdown", e => {
+    video.pause(); track.setPointerCapture(e.pointerId); seekTo(e);
+    const move = ev => seekTo(ev);
+    track.addEventListener("pointermove", move);
+    track.addEventListener("pointerup", () => track.removeEventListener("pointermove", move), { once: true });
+  });
+
+  $(".screen", el).addEventListener("keydown", e => {
+    if (e.key === " " || e.key === "k") { e.preventDefault(); toggle(el); }
+    else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      if (!el.classList.contains("started")) return;
+      video.pause();
+      video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + (e.key === "ArrowLeft" ? -1 : 1) / FPS));
+    }
+  });
+}
+
+function load(el, keepTime = false) {
+  const video = $("video", el), img = $("img", el);
+  const t = keepTime ? video.currentTime : 0;
+  el.classList.add("started", "loading");
+  video.src = `api/render/${el.moment.id}.clip?${trimQuery(el)}`;
+  video.oncanplay = () => {
+    video.oncanplay = null;
+    el.classList.remove("loading");
+    img.hidden = true; video.hidden = false;
+    if (keepTime) video.currentTime = Math.min(t, video.duration || t);
+    video.play().catch(() => {});
+  };
+  video.onerror = () => { el.classList.remove("loading", "started"); toast("Couldn't render this clip. Check the server log."); };
+  video.load();
+}
+
+function toggle(el) {
+  const video = $("video", el);
+  document.querySelectorAll("video").forEach(v => v !== video && v.pause());
+  if (!video.src) return load(el);
+  if (el.classList.contains("loading")) return;
+  if (video.ended) { video.currentTime = 0; video.play(); return; }
+  if (video.paused) video.play(); else video.pause();
+}
+
+/* ---------- take: copy / download ---------- */
+const kind = el => $(".seg input:checked", el).value;
+
+// Seconds into the clip for Frame: where it's paused, else the middle.
+function frameOffset(el) {
+  const v = $("video", el);
+  return !v.hidden && v.src ? v.currentTime : clipLength(el) / 2;
+}
+
+function frameParams(el, extra = {}) {
+  return new URLSearchParams({ ds: el.trim.ds, de: el.trim.de, caption: $(".capt input", el).checked, offset: frameOffset(el).toFixed(3), ...extra });
+}
+
+// Browsers put only images (PNG) and text/HTML on the clipboard, never GIF or video files. So Copy gives the
+// real image for Frame; a GIF goes as an <img> plus its link (rich editors paste the GIF, chat apps unfurl the
+// link); a video goes as a link. The clipboard needs HTTPS (or localhost); without it only links can be copied.
+const canCopy = window.isSecureContext && !!navigator.clipboard && "ClipboardItem" in window;
+// Phones can hand the actual file to another app, so there the download button shares instead.
+const canShare = matchMedia("(pointer: coarse)").matches && !!navigator.canShare
+  && navigator.canShare({ files: [new File([""], "x.gif", { type: "image/gif" })] });
+const SHARE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6c-1.11 0-2-.9-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .89 2 2z"/></svg>';
+const CHECK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>';
+
+function fileUrl(el, k, extra = {}) {
+  if (k === "frame") return `api/frame/${el.moment.id}.png?${frameParams(el, extra)}`;
+  const q = new URLSearchParams(extra);
+  if (el.trim.ds) q.set("ds", el.trim.ds);  // untrimmed links stay short: .../render/123.gif
+  if (el.trim.de) q.set("de", el.trim.de);
+  return `api/render/${el.moment.id}.${k === "clip" ? "mp4" : k}${q.size ? `?${q}` : ""}`;
+}
+const absolute = url => new URL(url, location.href).href;
+const fileName = (el, k) => `${el.moment.episode}_${Math.round(el.moment.start)}s.${{ gif: "gif", clip: "mp4", frame: "png" }[k]}`;
+
+// Copy's label says what lands on the clipboard; the separate link button is redundant when that's a link already.
+function syncTake(el) {
+  const k = kind(el);
+  $(".capt", el).hidden = k !== "frame";
+  const copyBtn = $(".copy", el);
+  if (copyBtn) copyBtn.textContent = k === "clip" ? "Copy link" : "Copy";
+  if (copyBtn) copyBtn.title = { gif: "Copy the GIF (chat apps get a link that previews it)", clip: "Copy a link to the video", frame: "Copy the picture" }[k];
+  $(".link", el).hidden = !!copyBtn && k === "clip";
+}
+
+async function fetchFile(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.blob();
+}
+
+function done(btn, label) {
+  const before = btn.innerHTML;
+  if (label) btn.textContent = label; else btn.innerHTML = CHECK_ICON;
+  setTimeout(() => { btn.innerHTML = before; }, 1500);
+}
+
+// The link to copy: a share link (public, if the server has a public address for them) when this visitor may
+// make one, else a link to the file on this server. Either way the file is rendered first, so it opens at once.
+function linkFor(el, k) {
+  const key = k === "frame" ? `${k}:${frameParams(el)}` : `${k}:${el.trim.ds}:${el.trim.de}`;
+  el.links ??= {};
+  return el.links[key] ??= (async () => {
+    if (!shareLinks) { await fetchFile(fileUrl(el, k)); return absolute(fileUrl(el, k)); }
+    const r = await fetch("api/share", { method: "POST", headers: favHeaders, body: JSON.stringify({
+      moment_id: el.moment.id, fmt: k, ds: el.trim.ds, de: el.trim.de,
+      offset: k === "frame" ? +frameOffset(el).toFixed(3) : 0, caption: $(".capt input", el).checked }) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    return data.url;
+  })().catch(e => { delete el.links[key]; throw e; });
+}
+
+// Takes a promise, so the clipboard is claimed during the click and filled once the link is ready (Safari needs
+// that). Without HTTPS there's no clipboard API, so the old execCommand route copies it instead.
+async function writeText(text) {
+  if (canCopy) return navigator.clipboard.write([new ClipboardItem({ "text/plain": Promise.resolve(text).then(t => new Blob([t], { type: "text/plain" })) })]);
+  if (window.isSecureContext && navigator.clipboard) return navigator.clipboard.writeText(await text);
+  const ta = Object.assign(document.createElement("textarea"), { value: await text });
+  ta.style.cssText = "position:fixed;opacity:0";
+  document.body.append(ta); ta.select();
+  const ok = document.execCommand("copy"); ta.remove();
+  if (!ok) throw new Error("the link is ready now, so click again");  // making it took longer than the click's say-so
+}
+
+async function busy(btn, fn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try { await fn(); }
+  catch (e) { if (e.name !== "AbortError") toast(`Couldn't ${btn.classList.contains("dl") ? "share" : "copy"}: ${e.message}`); }
+  finally { btn.disabled = false; }
+}
+
+function copy(el, btn) {
+  const k = kind(el), url = fileUrl(el, k);
+  return busy(btn, async () => {
+    const label = btn.textContent;
+    btn.textContent = "Copying…";
+    try {
+      if (k === "frame") {
+        // Hand the clipboard a promise so the click still counts while the picture renders (Safari insists).
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": fetchFile(url) })]);
+      } else if (k === "gif" && ClipboardItem.supports?.("image/gif")) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/gif": fetchFile(url) })]);  // no browser yet, but if one does
+      } else if (k === "gif") {
+        const link = linkFor(el, k);
+        const alt = el.moment.text.replace(/[<>&"]/g, "");
+        await navigator.clipboard.write([new ClipboardItem({
+          "text/html": link.then(l => new Blob([`<img src="${l}" alt="${alt}">`], { type: "text/html" })),
+          "text/plain": link.then(l => new Blob([l], { type: "text/plain" })),
+        })]);
+      } else {
+        await writeText(linkFor(el, k));
+      }
+      btn.textContent = label;
+      done(btn, k === "clip" ? "Link copied ✓" : "Copied ✓");
+    } catch (e) { btn.textContent = label; throw e; }
+  });
+}
+
+function copyLink(el, btn) {
+  const k = kind(el);
+  return busy(btn, async () => { await writeText(linkFor(el, k)); done(btn); });
+}
+
+// Share the file itself. Rendering can outlast the tap's permission to open the share sheet; if so, the file is
+// kept and the next tap shares it straight away.
+function share(el, btn) {
+  const k = kind(el), url = fileUrl(el, k);
+  return busy(btn, async () => {
+    el.shared ??= {};
+    const file = el.shared[url] ??= new File([await fetchFile(url)], fileName(el, k), { type: { gif: "image/gif", clip: "video/mp4", frame: "image/png" }[k] });
+    try { await navigator.share({ files: [file] }); }
+    catch (e) { if (e.name === "NotAllowedError") { toast("Ready: tap Share again"); return; } throw e; }
+  });
+}
+
+function download(el) {
+  const k = kind(el);
+  const url = fileUrl(el, k, { download: true });
+  const a = Object.assign(document.createElement("a"), { href: url, download: "" });
+  document.body.append(a); a.click(); a.remove();
+}
+
+results.addEventListener("change", e => {
+  const el = e.target.closest(".tile");
+  if (!el || !e.target.closest(".seg")) return;
+  syncTake(el);
+});
+
+results.addEventListener("click", e => {
+  const el = e.target.closest(".tile"); if (!el) return;
+  if (e.target.closest(".pp") || e.target.closest(".screen")) return toggle(el);
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.classList.contains("jf")) return openInJellyfin(el);
+  if (b.classList.contains("copy")) return copy(el, b);
+  if (b.classList.contains("link")) return copyLink(el, b);
+  if (b.classList.contains("dl")) return canShare ? share(el, b) : download(el);
+  if (b.dataset.trim) {
+    const k = b.dataset.trim;
+    el.trim[k] = Math.round((el.trim[k] + +b.dataset.step) * 10) / 10;
+    $(`[data-val=${k}]`, el).textContent = signed(el.trim[k]);
+    if (el.classList.contains("started")) load(el, k === "de");
+    else $(".clock", el).textContent = `0.0 / ${clipLength(el).toFixed(1)}s`;
+  }
+});
+
+$("#f").addEventListener("submit", e => {
+  e.preventDefault();
+  const q = $("#q").value.trim();
+  if (q) search(q);
+});
+
+/* ---------- the show: name, theme, account ---------- */
+let viewer = null;
+
+// Mostly-white logos vanish on a light background: average the luminance of the logo's visible pixels.
+function isPale(img) {
+  try {
+    const c = Object.assign(document.createElement("canvas"), { width: 64, height: 32 });
+    const g = c.getContext("2d");
+    g.drawImage(img, 0, 0, c.width, c.height);
+    const px = g.getImageData(0, 0, c.width, c.height).data;
+    let sum = 0, n = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i + 3] < 128) continue;
+      sum += 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]; n++;
+    }
+    return n > 0 && sum / n / 255 > 0.75;
+  } catch { return false; }
+}
+
+function applyTheme(t, name) {
+  if (!t) return;
+  const css = `:root { --sweater: ${t.accent}; --sweater-ink: ${t.accent_ink}; --sky: ${t.light.bg}; --brown: ${t.light.text_accent}; --chrome: ${t.chrome}; }
+    @media (prefers-color-scheme: dark) { :root { --sky: ${t.dark.bg}; --paper: ${t.dark.paper}; --brown: ${t.dark.text_accent}; } }`;
+  document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
+  document.querySelector('meta[name="theme-color"]')?.remove();
+  document.head.append(Object.assign(document.createElement("meta"), { name: "theme-color", content: t.accent }));
+  if (t.images.includes("backdrop")) {
+    const banner = $(".banner");
+    banner.style.setProperty("--backdrop", 'url("theme/backdrop")');
+    banner.classList.add("art");
+  }
+  if (t.images.includes("logo")) {
+    const img = Object.assign(new Image(), { src: "theme/logo", alt: name });
+    img.onload = () => { if (isPale(img)) img.classList.add("pale"); $("h1 a").replaceChildren(img); };
+  }
+}
+
+fetch("api/title").then(r => r.json()).then(t => {
+  $("h1 span").textContent = t.name;
+  document.title = `${t.name} · Clip Show`;
+  applyTheme(t.theme, t.name);
+}).catch(() => {});
+let favLimit = null;  // null until known; 0 = favorites are off for this visitor
+let shareLinks = false;  // may this visitor make public share links (otherwise links point at this server)
+const authReady = fetch("/api/auth/state").then(r => r.json())
+  .then(s => { viewer = s.user; favLimit = s.favorites_limit; shareLinks = s.share_links; Signin.account($("#account"), s); }).catch(() => {});
+
+async function openInJellyfin(el) {
+  if (!viewer) { Signin.open("Sign in to open moments in Jellyfin."); return; }
+  const tab = window.open("about:blank", "_blank");  // open now, while the click still counts, so popup blockers allow it
+  try {
+    const r = await fetch(`api/open/${el.moment.id}?ds=${el.trim.ds}`, { method: "POST" });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    if (tab) tab.location = data.url; else window.open(data.url, "_blank");
+  } catch (e) {
+    tab?.close();
+    toast(`Couldn't open in Jellyfin: ${e.message}`);
+  }
+}
+
+/* ---------- favorites ----------
+   Signed in with Jellyfin: kept on the server under the account. Signed out: the list lives in this
+   browser's storage, and the server is told about each starred clip (under a random browser id) so it
+   keeps that clip rendered. Signing in moves a browser's favorites to the account. */
+const SLUG = location.pathname.split("/")[2];
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+// crypto.randomUUID only exists on HTTPS pages; getRandomValues works on plain HTTP too (e.g. a tailnet address).
+const randomId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, "0")).join("");
+const BROWSER_ID = LS.get("clipshow:browser", null) || (() => { const id = randomId(); LS.set("clipshow:browser", id); return id; })();
+const FAV_KEY = `clipshow:favs:${SLUG}`;
+let favs = new Map();  // moment id -> {moment, ds, de}
+const favHeaders = { "Content-Type": "application/json", "X-Clipshow-Browser": BROWSER_ID };
+
+function markStar(el) {
+  const on = favs.has(el.moment.id), b = $(".star", el);
+  b.hidden = favLimit === 0 && !on;
+  b.setAttribute("aria-pressed", on);
+  b.title = on ? "Remove from favorites" : "Add to favorites";
+}
+
+function saveLocal() {
+  if (!viewer) LS.set(FAV_KEY, [...favs.values()]);
+}
+
+// Un-starring asks first (a small popover by the star); starring doesn't.
+function confirmUnstar(el) {
+  document.querySelector(".unfav")?.remove();
+  const pop = document.createElement("div");
+  pop.className = "unfav"; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Remove from favorites?");
+  pop.innerHTML = '<span>Remove from favorites?</span><button class="yes">Remove</button><button class="no">Keep</button>';
+  const close = () => { pop.remove(); document.removeEventListener("click", outside, true); document.removeEventListener("keydown", esc); };
+  const outside = e => { if (!pop.contains(e.target)) close(); };
+  const esc = e => { if (e.key === "Escape") { close(); $(".star", el).focus(); } };
+  pop.querySelector(".yes").addEventListener("click", e => { e.stopPropagation(); close(); toggleStar(el, true); });
+  pop.querySelector(".no").addEventListener("click", e => { e.stopPropagation(); close(); $(".star", el).focus(); });
+  $(".where", el).append(pop);
+  setTimeout(() => document.addEventListener("click", outside, true));
+  document.addEventListener("keydown", esc);
+  pop.querySelector(".yes").focus();
+}
+
+async function toggleStar(el, confirmed = false) {
+  const m = el.moment, on = favs.has(m.id);
+  if (on && !confirmed) return confirmUnstar(el);
+  const entry = on ? favs.get(m.id) : { moment: m, ds: el.trim.ds, de: el.trim.de };
+  on ? favs.delete(m.id) : favs.set(m.id, entry);
+  saveLocal();
+  document.querySelectorAll(".tile").forEach(t => t.moment.id === m.id && markStar(t));
+  try {
+    const r = await fetch("api/favorites", { method: on ? "DELETE" : "POST", headers: favHeaders,
+      body: JSON.stringify({ moment_id: m.id, ds: entry.ds, de: entry.de }) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+  } catch (e) {
+    on ? favs.set(m.id, entry) : favs.delete(m.id);  // undo
+    saveLocal();
+    document.querySelectorAll(".tile").forEach(t => t.moment.id === m.id && markStar(t));
+    toast(`Couldn't ${on ? "remove" : "save"} the favorite: ${e.message}`);
+  }
+}
+
+async function loadFavorites() {
+  if (viewer) {  // move anything starred while signed out (on any title) into the account
+    let local = [];
+    try { local = Object.keys(localStorage).filter(k => k.startsWith("clipshow:favs:")); } catch {}
+    if (local.length) {
+      await fetch("/api/favorites/claim", { method: "POST", headers: favHeaders, body: JSON.stringify({ browser_id: BROWSER_ID }) }).catch(() => {});
+      local.forEach(k => LS.del(k));
+    }
+  }
+  let list = [];
+  try {
+    const r = await fetch("api/favorites", { headers: favHeaders });
+    if (r.ok) list = (await r.json()).favorites.map(f => ({ moment: f, ds: f.ds, de: f.de }));
+  } catch {}
+  if (!viewer && !list.length) list = LS.get(FAV_KEY, []);  // server copy unavailable: use what this browser kept
+  favs = new Map(list.map(f => [f.moment.id, f]));
+  saveLocal();
+}
+
+function showFavorites() {
+  if (favLimit === 0 && !favs.size) { results.replaceChildren(); return; }  // favorites are off: start blank
+  $("#favs-head").hidden = false;
+  if (!favs.size) {
+    results.innerHTML = '<p class="empty">Star a clip and it will wait for you here.</p>';
+    status.textContent = "";
+    return;
+  }
+  results.replaceChildren(...[...favs.values()].map(f => {
+    const el = tile({ ...f.moment, ds: f.ds, de: f.de });
+    return el;
+  }));
+  status.textContent = "";
+}
+
+results.addEventListener("click", e => {
+  const b = e.target.closest(".star"); if (!b) return;
+  e.stopPropagation();
+  toggleStar(b.closest(".tile"));
+}, true);
+
+const initial = new URLSearchParams(location.search).get("q");
+authReady.then(loadFavorites).then(() => {
+  if (initial) { $("#q").value = initial; search(initial); }
+  else showFavorites();
+});
+</script>
+</body>
+</html>
